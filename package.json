@@ -1,18 +1,14 @@
 {
   "name": "os-event-logger",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
- "scripts": {
-  "start": "node server/server.js",
-  "dev": "nodemon server/server.js"
-}
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "description": "Real-Time OS Event Logger",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js"
+  },
   "dependencies": {
-    "express": "^5.2.1",
+    "express": "^4.22.1",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
