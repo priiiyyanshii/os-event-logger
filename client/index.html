@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OS Event Logger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { dark:'#0f1117', panel:'#1a1d27', border:'#2a2d3e', accent:'#6366f1' } } }
+    }
+  </script>
+</head>
+<body class="dark bg-[#0f1117] text-gray-100 font-mono min-h-screen flex flex-col">
+
+  <!-- TOP BAR -->
+  <header class="flex items-center justify-between px-6 py-3 border-b border-[#2a2d3e] bg-[#1a1d27] z-10">
+    <div class="flex items-center gap-3">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="6" fill="#6366f1"/>
+        <path d="M7 14h4l3-6 3 12 3-6h4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <h1 class="text-sm font-bold text-white tracking-widest uppercase">OS Event Logger</h1>
+        <p class="text-xs text-gray-500">Real-Time System Monitor</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-600"></span>
+      <span id="statusText" class="text-xs text-gray-400 uppercase tracking-wider">Idle</span>
+    </div>
+    <div class="flex items-center gap-4 text-xs text-gray-500">
+      <div>Events: <span id="totalEventCount" class="text-white font-bold">0</span></div>
+      <div>Session: <span id="sessionTime" class="text-[#6366f1] font-bold">00:00</span></div>
+    </div>
+  </header>
+
+  <!-- MAIN LAYOUT -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-56 bg-[#1a1d27] border-r border-[#2a2d3e] flex flex-col p-4 gap-6 overflow-y-auto">
+      <div>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Controls</p>
+        <div class="flex flex-col gap-2">
+          <button id="btnStart" onclick="startLogging()" class="bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2 transition-all">▶ Start Logging</button>
+          <button id="btnStop" onclick="stopLogging()" disabled class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2 transition-all opacity-50 cursor-not-allowed">⏹ Stop Logging</button>
+          <button onclick="clearLogs()" class="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2 transition-all">🗑 Clear Logs</button>
+          <button onclick="downloadLogs()" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-2 transition-all">⬇ Download JSON</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Filter by Type</p>
+        <div class="flex flex-col gap-1.5">
+          <button onclick="setFilter('all')" data-filter="all" class="filter-btn active-filter text-xs px-3 py-1.5 rounded-md text-left">🔘 All Events</button>
+          <button onclick="setFilter('process')" data-filter="process" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-blue-400">⚙️ Process</button>
+          <button onclick="setFilter('cpu')" data-filter="cpu" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-yellow-400">🔥 CPU</button>
+          <button onclick="setFilter('memory')" data-filter="memory" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-purple-400">💾 Memory</button>
+          <button onclick="setFilter('file')" data-filter="file" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-green-400">📁 File</button>
+          <button onclick="setFilter('network')" data-filter="network" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-cyan-400">🌐 Network</button>
+          <button onclick="setFilter('error')" data-filter="error" class="filter-btn text-xs px-3 py-1.5 rounded-md text-left text-red-400">⛔ Error</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Severity</p>
+        <div class="flex flex-col gap-1.5">
+          <button onclick="setSeverityFilter('all')" data-severity="all" class="severity-btn active-severity text-xs px-3 py-1.5 rounded-md text-left">All</button>
+          <button onclick="setSeverityFilter('info')" data-severity="info" class="severity-btn text-xs px-3 py-1.5 rounded-md text-left text-blue-400">ℹ Info</button>
+          <button onclick="setSeverityFilter('warning')" data-severity="warning" class="severity-btn text-xs px-3 py-1.5 rounded-md text-left text-yellow-400">⚠ Warning</button>
+          <button onclick="setSeverityFilter('critical')" data-severity="critical" class="severity-btn text-xs px-3 py-1.5 rounded-md text-left text-red-400">🚨 Critical</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Options</p>
+        <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-400">
+          <input type="checkbox" id="autoScrollToggle" checked onchange="toggleAutoScroll(this)" class="accent-indigo-500">
+          Auto-scroll logs
+        </label>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Stats Bar -->
+      <div class="grid grid-cols-4 gap-3 p-4 border-b border-[#2a2d3e] bg-[#1a1d27]/50">
+        <div class="rounded-lg border border-[#2a2d3e] bg-[#1a1d27] p-3 text-center">
+          <div class="text-2xl font-bold text-blue-400" id="statProcess">0</div>
+          <div class="text-xs text-gray-500 mt-1">Process Events</div>
+        </div>
+        <div class="rounded-lg border border-[#2a2d3e] bg-[#1a1d27] p-3 text-center">
+          <div class="text-2xl font-bold text-yellow-400" id="statCPU">0</div>
+          <div class="text-xs text-gray-500 mt-1">CPU Events</div>
+        </div>
+        <div class="rounded-lg border border-[#2a2d3e] bg-[#1a1d27] p-3 text-center">
+          <div class="text-2xl font-bold text-purple-400" id="statMemory">0</div>
+          <div class="text-xs text-gray-500 mt-1">Memory Events</div>
+        </div>
+        <div class="rounded-lg border border-[#2a2d3e] bg-[#1a1d27] p-3 text-center">
+          <div class="text-2xl font-bold text-red-400" id="statError">0</div>
+          <div class="text-xs text-gray-500 mt-1">Errors</div>
+        </div>
+      </div>
+
+      <!-- Charts + Log -->
+      <div class="flex flex-1 overflow-hidden">
+
+        <!-- Charts Panel -->
+        <div class="w-72 border-r border-[#2a2d3e] bg-[#1a1d27]/30 p-4 flex flex-col gap-4 overflow-y-auto">
+          <div class="rounded-xl border border-[#2a2d3e] bg-[#1a1d27] p-3">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-yellow-400 uppercase tracking-wider">🔥 CPU Usage</p>
+              <span id="cpuValue" class="text-xs font-bold text-yellow-400">0%</span>
+            </div>
+            <div class="h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+              <div id="cpuBar" class="h-full bg-yellow-400 rounded-full transition-all duration-500" style="width:0%"></div>
+            </div>
+            <canvas id="cpuChart" height="100"></canvas>
+          </div>
+          <div class="rounded-xl border border-[#2a2d3e] bg-[#1a1d27] p-3">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-purple-400 uppercase tracking-wider">💾 Memory Usage</p>
+              <span id="memValue" class="text-xs font-bold text-purple-400">0%</span>
+            </div>
+            <div class="h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+              <div id="memBar" class="h-full bg-purple-400 rounded-full transition-all duration-500" style="width:0%"></div>
+            </div>
+            <canvas id="memChart" height="100"></canvas>
+          </div>
+          <div class="rounded-xl border border-[#2a2d3e] bg-[#1a1d27] p-3">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Event Distribution</p>
+            <canvas id="pieChart" height="160"></canvas>
+          </div>
+        </div>
+
+        <!-- Log Panel -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <div class="flex items-center gap-3 px-4 py-2 border-b border-[#2a2d3e] bg-[#1a1d27]/50">
+            <input id="searchInput" type="text" placeholder="Search logs..." oninput="applyFilters()"
+              class="flex-1 bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-1.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+            <span id="filteredCount" class="text-xs text-gray-600">0 events</span>
+          </div>
+          <div id="logContainer" class="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
+            <div id="emptyState" style="text-align:center;padding:60px;color:#4b5563">
+              <div style="font-size:3rem">🖥️</div>
+              <p>Click Start Logging to begin monitoring.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" style="position:fixed;bottom:24px;right:24px;background:#1f2937;color:#f9fafb;padding:10px 16px;border-radius:10px;font-size:12px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999;border:1px solid #374151;"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
